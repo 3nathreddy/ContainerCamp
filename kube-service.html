@@ -1,0 +1,85 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../core-icons/core-icons.html">
+<link rel="import" href="../paper-icon-button/paper-icon-button.html">
+
+<link rel="import" href="kube-card.html">
+
+<polymer-element name="kube-service" attributes="sid data core">
+  <template>
+    <link rel="stylesheet" href="kube-service.css">
+
+    <kube-card icon="settings-ethernet" top="{{data.id}}">
+      <main>
+        {{data.port}} &rsaquo; {{data.containerPort}}
+        <div class="top space">
+          <template repeat="{{k in data.selector | keys}}">
+            <div class="smaller inline">
+              <span class="slabel name">{{k}}
+              </span><span class="slabel value">{{data.selector[k]}}</span>
+            </div>
+          </template>
+        </div>
+      </main>
+
+      <template repeat="{{k in data.labels | keys}}">
+        <div class="smaller label item">
+          <span class="label name">{{k}}
+          </span><span class="label value">{{data.labels[k]}}</span>
+        </div>
+      </template>
+
+      <bottom>{{data.creationTimestamp | date}}</bottom>
+      <paper-icon-button id="close" icon="close" on-click="{{remove}}"></paper-icon-button>
+    </kube-card>
+  </template>
+
+  <script>
+    Polymer({
+      data: null,
+
+      // TODO: refresh on sid or core changes
+      // observe: {
+      //   'sid core': 'refresh'
+      // },
+
+      ready: function() {
+        if (!this.data) {
+          this.refresh();
+        }
+      },
+
+      date: function(v) {
+        return v ? new Date(v).toLocaleString() : null;
+      },
+      keys: function(obj) {
+        return obj ? Object.keys(obj) : [];
+      },
+      labels: function(obj) {
+        var labels = [];
+        for (var k in obj) {
+          labels.push(k + '=' + obj[k]);
+        }
+        return labels.join(', ');
+      },
+
+      receive: function(response) {
+        this.data = response;
+        this.sid = this.data.id;
+      },
+
+      refresh: function(force) {
+        this.refreshJob = this.job(this.refreshJob, function(){
+          this.core && this.core.getService({
+            sid: this.sid,
+            callback: this.receive.bind(this)
+          });
+        }, 0);
+      },
+
+      remove: function() {
+        this.core && this.core.removeService({sid: this.sid});
+        this.super();
+      }
+    });
+  </script>
+</polymer-element>

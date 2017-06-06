@@ -1,0 +1,114 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../core-selector/core-selector.html">
+<link rel="import" href="../core-icons/core-icons.html">
+<link rel="import" href="../paper-icon-button/paper-icon-button.html">
+
+<link rel="import" href="kube-core.html">
+<link rel="import" href="kube-view-pods.html">
+<link rel="import" href="kube-view-replicas.html">
+<link rel="import" href="kube-view-services.html">
+<link rel="import" href="kube-new-pod.html">
+<link rel="import" href="kube-new-replc.html">
+<link rel="import" href="kube-new-service.html">
+
+<polymer-element name="kube-cluster" attributes="baseurl apiver zone auth core view">
+  <template>
+    <style>
+      :host {
+        display: block;
+      }
+      #nav {
+        display: block;
+        margin-bottom: 1em;
+      }
+      #createForm {
+        display: block;
+        margin-bottom: 1.5em;
+        padding-bottom: 1em;
+        border-bottom: 1px solid rgba(0,0,0,0.12);
+      }
+      paper-icon-button.add {
+        color: #e84e40;
+      }
+    </style>
+
+    <section id="nav">
+      <core-selector valueattr="view" selected="{{view}}">
+        <paper-icon-button view="pods" fill isToggle icon="group-work"></paper-icon-button>
+        <paper-icon-button view="replicationControllers" fill isToggle icon="apps"></paper-icon-button>
+        <paper-icon-button view="services" fill isToggle icon="settings-ethernet"></paper-icon-button>
+        <paper-icon-button view="minions" fill isToggle icon="cloud"></paper-icon-button>
+      </core-selector>
+
+      <paper-icon-button class="add" icon="add-circle" fill isToggle
+        active="{{showCreateForm}}">
+      </paper-icon-button>
+    </section>
+
+    <template if="{{showCreateForm}}">
+      <section id="createForm" on-kube-pod-created="{{hideCreateForm}}"
+                             on-kube-replc-created="{{hideCreateForm}}"
+                             on-kube-service-created="{{hideCreateForm}}">
+        <template if="{{view == 'pods'}}">
+          <kube-new-pod core="{{core}}"></kube-new-pod>
+        </template>
+        <template if="{{view == 'replicationControllers'}}">
+          <kube-new-replc core="{{core}}"></kube-new-replc>
+        </template>
+        <template if="{{view == 'services'}}">
+          <kube-new-service core="{{core}}"></kube-new-service>
+        </template>
+      </section>
+    </template>
+
+    <section>
+      <template if="{{view == 'pods'}}">
+        <kube-view-pods core="{{core}}"></kube-view-pods>
+      </template>
+      <template if="{{view == 'replicationControllers'}}">
+        <kube-view-replicas core="{{core}}"></kube-view-replicas>
+      </template>
+      <template if="{{view == 'services'}}">
+        <kube-view-services core="{{core}}"></kube-view-services>
+      </template>
+      <template if="{{view == 'minions'}}">
+        TODO: minions (VMs) view
+      </template>
+    </section>
+
+  </template>
+
+  <script>
+    Polymer({
+      baseurl: 'http://localhost:8001',
+      apiver: 'v1beta1',
+      zone: 'europe-west1-a',
+      view: 'pods',
+
+      observe: {
+        'baseurl apiver zone auth': 'updateCoreConfig',
+        'view': 'hideCreateForm'
+      },
+
+      hideCreateForm: function() {
+        this.showCreateForm = false;
+      },
+
+      ready: function() {
+        if (!this.core && this.baseurl) {
+          this.core = document.createElement('kube-core');
+          this.updateCoreConfig(null, true);
+        }
+      },
+
+      updateCoreConfig: function(oldval, newval) {
+        if (this.core && newval) {
+          this.core.baseurl = this.baseurl;
+          this.core.apiver = this.apiver;
+          this.core.zone = this.zone;
+          this.core.auth = this.auth;
+        }
+      }
+    });
+  </script>
+</polymer-element>

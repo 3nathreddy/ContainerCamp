@@ -1,0 +1,124 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../core-icons/core-icons.html">
+<link rel="import" href="../paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../paper-item/paper-item.html">
+
+<link rel="import" href="kube-card.html">
+
+<polymer-element name="kube-pod" attributes="pid data core">
+  <template>
+    <link rel="stylesheet" href="kube-pod.css">
+
+    <kube-card class="{{data.currentState.status}}" icon="check-circle-blank"
+               top="{{data.id}}">
+      <main>
+        <template if="{{!data.currentState.host}}">
+          Not deployed
+        </template>
+        <template if="{{data.currentState.host}}">
+          <paper-item icon="launch" on-click="{{ssh}}">
+            <span class="truncate">{{data.currentState.host}}</span>
+          </paper-item>
+          {{data.currentState.hostIP}}
+          <span class="d">/</span>
+          <span class="secondary">{{data.currentState.podIP}}</span>
+        </template>
+
+        <ul class="bullets top space">
+          <template repeat="{{c in data.desiredState.manifest.containers}}">
+            <li class="{{data.currentState.info[c.name].State | cStatus}}">
+              {{c.name}}<br/>
+              <span class="secondary smaller newline">{{c.image}}</span>
+              <span class="secondary smaller newline">{{c.command | join}}</span>
+              <span class="secondary smaller newline">{{c.ports | cPorts}}</span>
+              <span class="secondary smaller newline">{{c.env | cEnv}}</span>
+            </li>
+          </template>
+        </ul>
+      </main>
+
+      <template repeat="{{k in data.labels | keys}}">
+        <div class="smaller label item">
+          <span class="label name">{{k}}
+          </span><span class="label value">{{data.labels[k]}}</span>
+        </div>
+      </template>
+
+      <bottom>{{data.creationTimestamp | date}}</bottom>
+      <paper-icon-button id="close" icon="close" on-click="{{remove}}"></paper-icon-button>
+    </kube-card>
+  </template>
+
+  <script>
+    Polymer({
+      // TODO: refresh on pid or core changes
+      // observe: {
+      //   'pid core': 'refresh'
+      // },
+
+      ready: function() {
+        if (!this.data) {
+          this.refresh();
+        }
+      },
+
+      date: function(v) {
+        return v ? new Date(v).toLocaleString() : null;
+      },
+      keys: function(obj) {
+        return obj ? Object.keys(obj) : [];
+      },
+      cPorts: function(items) {
+        var ports = [];
+        if (!items) {
+          return;
+        }
+        for (var i=0, p; p = items[i]; i++) {
+          ports.push(p.hostPort + ':' + p.containerPort);
+        };
+        return ports.join(', ');
+      },
+      cEnv: function(items) {
+        if (!items) {
+          return;
+        }
+        var env = [];
+        for (var i=0, e; e = items[i]; i++) {
+          env.push(e.name + '=' + e.value);
+        }
+        return env.join(', ')
+      },
+      cStatus: function(state) {
+        if (!state || !state.Running) return "stopped";
+        return state.Paused ? "paused" : "running";
+      },
+      join: function(items, delim) {
+        return (items || []).join(delim || ' ');
+      },
+
+      receive: function(response) {
+        this.data = response;
+        this.pid = this.data.id;
+      },
+
+      refresh: function() {
+        this.refreshJob = this.job(this.refreshJob, function(){
+          this.core && this.core.getPod({
+            pid: this.pid,
+            callback: this.receive.bind(this)
+          });
+        }, 0);
+      },
+
+      remove: function() {
+        this.core && this.core.removePod({pid: this.pid});
+        this.super();
+      },
+
+      ssh: function() {
+        var url = this.core && this.core.sshURL(this.data.currentState.host);
+        url && window.open(url, '_blank', 'menubar=no,status=no,toolbar=no,scrollbars=yes');
+      }
+    });
+  </script>
+</polymer-element>

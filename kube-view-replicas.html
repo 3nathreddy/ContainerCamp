@@ -1,0 +1,49 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<link rel="import" href="kube-replc.html">
+
+<polymer-element name="kube-view-replicas" attributes="data core">
+  <template>
+    <style>
+      :host { display: block; }
+    </style>
+    <template repeat="{{item in data.items}}">
+      <kube-replc rid="{{item.id}}" core="{{core}}"></kube-replc>
+    </template>
+  </template>
+  <script src="utils.js"></script>
+  <script>
+    Polymer({
+      data: {items: []},
+      refreshInterval: 2000,
+      observe: {
+        'core': 'refresh'
+      },
+
+      ready: function() {
+        this.isDetached = false;
+        this.refresh(!this.data || !this.data.refreshed ? 0 : this.refreshInterval);
+      },
+
+      detached: function() {
+        this.isDetached = true;
+      },
+
+      // TODO: handle errors
+      receive: function(response, isError) {
+        if (!compareArrays(this.data.items, response.items))
+          this.data = response;
+        this.data.refreshed = Date.now();
+        !this.isDetached && this.refresh(this.refreshInterval);
+      },
+
+      refresh: function(delay) {
+        this.refreshJob = this.job(this.refreshJob, this.refreshNow, delay || 0);
+      },
+
+      refreshNow: function() {
+        this.core && this.core.listReplicas({callback: this.receive.bind(this)});
+      }
+    });
+  </script>
+</polymer-element>

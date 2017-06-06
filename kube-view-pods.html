@@ -1,0 +1,53 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<link rel="import" href="kube-pod.html">
+
+<polymer-element name="kube-view-pods" attributes="data core">
+  <template>
+    <style>
+      kube-view-replicas {
+        margin-bottom: 2em;
+        padding-bottom: 1.5em;
+        border-bottom: 1px solid rgba(0,0,0,0.12);
+      }
+    </style>
+    <kube-view-replicas core="{{core}}"></kube-view-replicas>
+    <template repeat="{{pod in data.items}}">
+      <kube-pod pid="{{pod.id}}" data="{{pod}}" core="{{core}}"></kube-pod>
+    </template>
+  </template>
+  <script src="utils.js"></script>
+  <script>
+    Polymer({
+      data: {items: []},
+      refreshInterval: 2000,
+      observe: {
+        'core': 'refresh'
+      },
+
+      ready: function() {
+        this.isDetached = false;
+        this.refresh(!this.data || !this.data.refreshed ? 0 : this.refreshInterval);
+      },
+
+      detached: function() {
+        this.isDetached = true;
+      },
+
+      // TODO: handle errors
+      receive: function(response, isError) {
+        this.data.items = sortObjectsByString(response.items, 'id');
+        this.data.refreshed = Date.now();
+        !this.isDetached && this.refresh(this.refreshInterval);
+      },
+
+      refresh: function(delay) {
+        this.refreshJob = this.job(this.refreshJob, this.refreshNow, delay || 0);
+      },
+
+      refreshNow: function() {
+        this.core && this.core.listPods({callback: this.receive.bind(this)});
+      }
+    });
+  </script>
+</polymer-element>

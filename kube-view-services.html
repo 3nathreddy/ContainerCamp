@@ -1,0 +1,42 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<link rel="import" href="kube-service.html">
+
+<polymer-element name="kube-view-services" attributes="data core">
+  <template>
+    <template repeat="{{item in data.items}}">
+      <kube-service sid="{{item.id}}" data="{{item}}" core="{{core}}"></kube-service>
+    </template>
+  </template>
+  <script>
+    Polymer({
+      data: null,
+      observe: {
+        'core': 'refresh'
+      },
+
+      ready: function() {
+        this.isDetached = false;
+        this.refresh(!this.data ? 0 : 1000);
+      },
+
+      detached: function() {
+        this.isDetached = true;
+      },
+
+      // TODO: handle error
+      receive: function(response, isError) {
+        this.data = response;
+        !this.isDetached && this.refresh(1000);
+      },
+
+      refresh: function(delay) {
+        this.refreshJob = this.job(this.refreshJob, this.refreshNow, delay || 0);
+      },
+
+      refreshNow: function() {
+        this.core && this.core.listServices({callback: this.receive.bind(this)});
+      }
+    });
+  </script>
+</polymer-element>

@@ -1,0 +1,141 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../core-icons/core-icons.html">
+<link rel="import" href="../paper-slider/paper-slider.html">
+<link rel="import" href="../paper-icon-button/paper-icon-button.html">
+
+<link rel="import" href="kube-card.html">
+
+<polymer-element name="kube-replc" attributes="rid data core">
+  <template>
+    <link rel="stylesheet" href="kube-replc.css">
+
+    <kube-card icon="apps" top="{{data.id}}">
+      <main>
+        <span class="circle">{{data.desiredState.replicas}}</span> replicas
+
+        <div class="top space">
+          <paper-slider pin snaps min="0" max="20" step="1"
+               value="{{data.desiredState.replicas}}"></paper-slider>
+        </div>
+
+        <div class="top space">
+          <template repeat="{{k in data.desiredState.replicaSelector | keys}}">
+            <div class="smaller inline">
+              <span class="slabel name">{{k}}
+              </span><span class="slabel value">{{data.desiredState.replicaSelector[k]}}</span>
+            </div>
+          </template>
+        </div>
+
+        <ul class="bullets">
+          <template repeat="{{c in data.desiredState.podTemplate.desiredState.manifest.containers}}">
+            <li>
+              {{c.name}}<br/>
+              <span class="secondary smaller newline">{{c.image}}</span>
+              <span class="secondary smaller newline">{{c.ports | cPorts}}</span>
+            </li>
+          </template>
+        </ul>
+      </main>
+
+      <template repeat="{{k in data.labels | keys}}">
+        <div class="smaller label item">
+          <span class="label name">{{k}}
+          </span><span class="label value">{{data.labels[k]}}</span>
+        </div>
+      </template>
+
+      <bottom>{{data.creationTimestamp | date}}</bottom>
+      <paper-icon-button id="close" icon="close" on-click="{{remove}}"></paper-icon-button>
+    </kube-card>
+  </template>
+
+  <script>
+    Polymer({
+      refreshInterval: 2000,
+      observe: {
+        'data.desiredState.replicas': 'maybeUpdate',
+        'rid': 'refresh'
+        // TODO: refresh on core changes
+      },
+
+      ready: function() {
+        this.isUpdating = false;
+        if (!this.data && this.rid)
+          this.refresh();
+      },
+
+      detached: function() {
+        this.isDetached = true;
+      },
+
+      date: function(v) {
+        return v ? new Date(v).toLocaleString() : null;
+      },
+      keys: function(obj) {
+        return obj ? Object.keys(obj) : [];
+      },
+      labels: function(obj) {
+        var labels = [];
+        for (var k in obj) {
+          labels.push(k + '=' + obj[k]);
+        }
+        return labels.join(', ');
+      },
+      cPorts: function(items) {
+        var ports = [];
+        if (!items) {
+          return;
+        }
+        for (var i=0, p; p = items[i]; i++) {
+          ports.push(p.hostPort + ':' + p.containerPort);
+        };
+        return ports.join(', ');
+      },
+
+      receive: function(response) {
+        if (this.isUpdating)
+          return;
+        if (response.id) {
+          this.data = response;
+          this.rid = this.data.id;
+        }
+        !this.isDetached && this.refresh(this.refreshInterval);
+      },
+
+      refresh: function(delay) {
+        this.refreshJob = this.job(this.refreshJob, this.refreshNow, parseInt(delay) || 0);
+      },
+
+      refreshNow: function() {
+        this.core && this.core.getReplica({
+          rid: this.rid,
+          callback: this.receive.bind(this)
+        });
+      },
+
+      maybeUpdate: function(oldval, newval) {
+        if (typeof oldval !== 'undefined' && newval >= 0) {
+          this.update();
+        }
+      },
+
+      update: function() {
+        if (!this.core)
+          return;
+        var self = this;
+        var callback = function() {
+          self.isUpdating = false;
+          self.receive.apply(self, arguments);
+        }
+        this.isUpdating = true;
+        this.core.updateReplica({rid: this.rid, callback: callback}, this.data);
+      },
+
+      remove: function() {
+        this.core && this.core.removeReplica({rid: this.rid});
+        this.super();
+      }
+    });
+  </script>
+</polymer-element>

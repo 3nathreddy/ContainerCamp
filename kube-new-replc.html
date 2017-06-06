@@ -1,0 +1,183 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../core-icons/core-icons.html">
+<link rel="import" href="../paper-input/paper-input.html">
+<link rel="import" href="../paper-slider/paper-slider.html">
+<link rel="import" href="../paper-button/paper-button.html">
+<link rel="import" href="../paper-fab/paper-fab.html">
+
+<link rel="import" href="kube-card.html">
+<link rel="import" href="kube-new-container.html">
+
+<polymer-element name="kube-new-replc" attributes="core label">
+  <template>
+    <style>
+      :host {
+        display: block;
+      }
+      kube-card {
+        width: 20%;
+      }
+      kube-card paper-input, kube-card paper-slider {
+        width: 100%;
+      }
+      paper-fab {
+        color: #ffffff;
+      }
+      .actions > paper-button {
+        color: #4285f4;
+        fill: #4285f4;
+      }
+      .circle {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 50%;
+        background-color: #eeeeee;
+        border: 1px solid #bdbdbd;
+      }
+      .top.space {
+        margin-top: 0.7em;
+      }
+    </style>
+
+    <kube-card icon="apps" top="{{label}}">
+      <main>
+        <span class="circle">{{data.desiredState.replicas}}</span> replicas
+        <div class="top space">
+          <paper-slider pin snaps
+            min="0" max="4" step="1"
+            value="{{data.desiredState.replicas}}">
+          </paper-slider>
+        </div>
+        <paper-input floatingLabel required
+          label="Controller ID: frontendCtrl" value="{{data.id}}">
+        </paper-input>
+        <paper-input floatingLabel
+          label="Labels: stage=dev, kind=frontend" value="{{data.labels}}">
+        </paper-input>
+      </main>
+    </kube-card>
+
+    <template repeat="{{c, i in containers}}">
+      <kube-new-container
+        data="{{c}}"
+        idx="{{i}}"
+        on-remove-me="{{removeContainer}}">
+      </kube-new-container>
+    </template>
+
+    <paper-fab class icon="add" on-click="{{addContainer}}"></paper-fab>
+
+    <section class="actions">
+      <paper-button label="Create" on-click="{{create}}"></paper-button>
+    </section>
+  </template>
+  <script>
+    Polymer({
+      label: 'New Replication Controller',
+
+      data: {
+        id: 'myController',
+        labels: '',
+        desiredState: {
+          replicas: 1
+        }
+      },
+      containers: [{
+        name: "nginx",
+        image: "dockerfile/nginx",
+        command: "",
+        ports: "",
+        env: ""
+      }],
+
+      addContainer: function() {
+        this.containers.push({});
+      },
+
+      removeContainer: function(event, obj, source) {
+        this.containers.splice(source.idx, 1);
+      },
+
+      create: function() {
+        if (!this.core) {
+          return;
+        };
+
+        var replc = {
+          id: this.data.id,
+          labels: {},
+          desiredState: this.data.desiredState
+        };
+        replc.desiredState.podTemplate = {
+          desiredState: {
+            manifest: {version: "v1beta2"}
+          }
+        };
+
+        var containers = [];
+        this.containers.forEach(function(c) {
+          if (!c.name || !c.image)
+            return;
+          var container = {
+            name: c.name,
+            image: c.image
+          };
+          if (c.command) {
+            container['command'] = c.command.split(/ +/);
+          }
+          if (c.ports) {
+            var ports = c.ports.
+              replace(/, +/g, ',').
+              split(/[, ]/).
+              filter(function(p) { return p.indexOf(':') > 0 }) || [];
+            for (var i=0, p; p = ports[i]; i++) {
+              var parts = p.split(':');
+              ports[i] = {
+                hostPort: parseInt(parts[0]),
+                containerPort: parseInt(parts[1])
+              };
+            }
+            container['ports'] = ports;
+          }
+          if (c.env) {
+            var env = c.env.
+              replace(/, +/g, ',').
+              split(/[, ]/).
+              filter(function(e) { return e.indexOf('=') > 0 }) || [];
+            for (var i=0, e; e = env[i]; i++) {
+              var parts = e.split('=');
+              env[i] = {name: parts[0], value: parts[1]};
+            }
+            container['env'] = env;
+          }
+          containers.push(container);
+        });
+
+        var labels = this.data.labels.
+          replace(/, +/g, ',').
+          split(/[, ]/).
+          filter(function(e) { return e.indexOf('=') > 0 }) || [];
+        for (var i=0, l; l = labels[i]; i++) {
+          var parts = l.split('=');
+          replc.labels[parts[0]] = parts[1];
+        }
+        if (!replc.labels['name']) {
+          replc.labels['name'] = replc.id;
+        }
+
+        replc.desiredState.replicaSelector = replc.labels;
+        replc.desiredState.podTemplate.labels = replc.labels;
+        replc.desiredState.podTemplate.desiredState.manifest.containers = containers;
+
+        this.core.createReplica({
+          callback: this.handleCreateResponse.bind(this)
+        }, replc);
+      },
+
+      handleCreateResponse: function(resp, isError) {
+        var evtName = isError ? 'kube-replc-create-error' : 'kube-replc-created';
+        this.fire(evtName, resp);
+      }
+    });
+  </script>
+</polymer-element>
